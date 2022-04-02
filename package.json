@@ -1,0 +1,22 @@
+{
+  "name": "MQTT Broker",
+  "version": "1.0.0",
+  "description": "A mqtt server for IoT-Dashboard",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "mqtt_test": "nodemon mqtt.js",
+    "start": "node index.js"
+  },
+  "author": "Leder Diez",
+  "license": "PRIVATE",
+  "dependencies": {
+    "aedes": "^0.46.3",
+    "colors": "^1.4.0",
+    "mongoose": "^6.2.9",
+    "dotenv": "^8.2.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.15"
+  }
+}
