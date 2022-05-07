@@ -1,26 +1,64 @@
-const cluster = require('cluster')
+const {PORT, NODE_ENV, MONGO_URL}= require('./config');
+
+const cluster = require('cluster');
 const colors	 = require('colors');
+const ws = require('websocket-stream');
+const Socket_Server = require('http').createServer()
+
 
 function startAedes () {
-  const port = 1883
   
   const aedes = require('aedes')({
-    id: 'BROKER_' + cluster.worker.id,
-  })
-  const server = require('net').createServer(aedes.handle)
+    id: 'BROKER_' + cluster.worker.id
+  });
 
-  server.listen(port, function () {
-    console.log('Aedes listening on port:', port)
-    aedes.publish({ topic: 'aedes/hello', payload: "I'm broker " + aedes.id })
+  ws.createServer({ server: Socket_Server }, aedes.handle);
+  const TCP_Server = require('net').createServer(aedes.handle);
+
+  TCP_Server.listen(PORT, function () {
+    console.log('Aedes listening on port:', PORT)
+    aedes.publish({ topic: 'aedes/hello', payload: "I'm broker " + aedes.id });
   })
 
+  Socket_Server.listen(1884, function () {
+    console.log('Aedes listening on port:', 1884)
+    aedes.publish({ topic: 'aedes/hello', payload: "I'm broker " + aedes.id });
+  })
+
+  aedes.authenticate = function (client, username, password, callback) {
+    if (username == 'testuser' && password == 'testpass') {
+      callback(null, true)
+    } else {
+      callback(null, false)
+    }
+  }
+
+  aedes.authorizeSubscribe = function (client, sub, callback) {
+    /*if (sub.topic === 'aaaa') {
+      return callback(new Error('wrong topic'))
+    }
+    if (sub.topic === 'bbb') {
+      // overwrites subscription
+      sub.topic = 'foo'
+      sub.qos = 1
+    }*/
+    callback(null, sub)
+  }
+
+  // fired when a client subscribe
+  aedes.on('clientError', function (client, error) {
+    //console.log(error);
+  })
+
+  // fired when a client subscribe
   aedes.on('subscribe', function (subscriptions, client) {
-    console.log('MQTT client \x1b[32m' + (client ? client.id : client) +
+    console.log('Client \x1b[32m' + (client ? client.id : client) +
             '\x1b[0m subscribed to topics: ' + subscriptions.map(s => s.topic).join('\n'), 'from broker', aedes.id)
   })
 
+  // fired when a client unsubscribe
   aedes.on('unsubscribe', function (subscriptions, client) {
-    console.log('MQTT client \x1b[32m' + (client ? client.id : client) +
+    console.log('Client \x1b[32m' + (client ? client.id : client) +
             '\x1b[0m unsubscribed to topics: ' + subscriptions.join('\n'), 'from broker', aedes.id)
   })
 
@@ -36,7 +74,9 @@ function startAedes () {
 
   // fired when a message is published
   aedes.on('publish', async function (packet, client) {
-    console.log('Client \x1b[31m' + (client ? client.id : 'BROKER_' + aedes.id) + '\x1b[0m has published', packet.payload.toString(), 'on', packet.topic, 'to broker', aedes.id)
+    if (client) {
+      console.log('Client \x1b[31m' + client.id + '\x1b[0m has published', packet.payload.toString(), 'on', packet.topic, 'to', aedes.id)
+    }
   })
 }
 
