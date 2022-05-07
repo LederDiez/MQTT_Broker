@@ -1,4 +1,4 @@
-const {PORT, NODE_ENV, MONGO_URL}= require('./config');
+const {PORT_ENB, PORT_WEB, NODE_ENV, MONGO_URL}= require('./config');
 
 const cluster = require('cluster');
 const colors	 = require('colors');
@@ -15,13 +15,13 @@ function startAedes () {
   ws.createServer({ server: Socket_Server }, aedes.handle);
   const TCP_Server = require('net').createServer(aedes.handle);
 
-  TCP_Server.listen(1833, function () {
-    console.log('Aedes listening on port:', 1883)
+  TCP_Server.listen(PORT_ENB, function () {
+    console.log('Aedes listening on port:', PORT_ENB)
     aedes.publish({ topic: 'aedes/hello', payload: "I'm broker " + aedes.id });
   })
 
-  Socket_Server.listen(1884, function () {
-    console.log('Aedes listening on port:', 1884)
+  Socket_Server.listen(PORT_WEB, function () {
+    console.log('Aedes listening on port:', PORT_WEB)
     aedes.publish({ topic: 'aedes/hello', payload: "I'm broker " + aedes.id });
   })
 
