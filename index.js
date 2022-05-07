@@ -15,8 +15,8 @@ function startAedes () {
   ws.createServer({ server: Socket_Server }, aedes.handle);
   const TCP_Server = require('net').createServer(aedes.handle);
 
-  TCP_Server.listen(PORT, function () {
-    console.log('Aedes listening on port:', PORT)
+  TCP_Server.listen(1833, function () {
+    console.log('Aedes listening on port:', 1883)
     aedes.publish({ topic: 'aedes/hello', payload: "I'm broker " + aedes.id });
   })
 
