@@ -1,1 +1,1 @@
-npm run mqtt_test
+npm run start:dev
