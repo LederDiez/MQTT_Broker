@@ -11,9 +11,10 @@ async function main () {
 }
 
 const DeviceDataModelSchema = new mongoose.Schema({
+  deviceSerial: { type: String, required: true },
   updated: { type: Date, default: Date.now },
-  data: String,
-})
+  data: { type: mongoose.Schema.Types.Mixed }
+});
 
 const UserSchema = new mongoose.Schema({
   uuid: { type: String, maxlength: 100 },
@@ -49,8 +50,8 @@ module.exports.devices = () => {
   return model
 }
 
-module.exports.devicesDatas = (deviceSerial, data) => {
-  const collection = 'device-' + deviceSerial
-  const model = mongoose.model(collection, DeviceDataModelSchema)
-  return new model({data: data})
+const DeviceData = mongoose.model('DeviceData', DeviceDataModelSchema);
+
+module.exports.saveDeviceData = (deviceSerial, data) => {
+  return new DeviceData({ deviceSerial, data });
 }

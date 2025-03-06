@@ -1,6 +1,7 @@
 const colors = require('colors')
 const ws = require('websocket-stream')
 const http = require('http')
+const net = require('net')
 const aedes = require('aedes')({ id: 'BROKER' })
 const mongoose = require('mongoose')
 
@@ -10,21 +11,13 @@ const models = require('./models')
 // Config
 const configs = require('./config')
 
+// Función de autenticación
 function AunthClient(client, username, password) {
-  
   return new Promise(resolve => {
     client.clientData = {}
     if (username == 'user') {
-  
-      const filter = {
-        uuid: password.toString()
-      }
-  
-      const update = {
-        uuid: '',
-        authTime: 0
-      }
-  
+      const filter = { uuid: password.toString() }
+      const update = { uuid: '', authTime: 0 }
       models.users().findOneAndUpdate(filter, update, function (err, result) {
         if (err != null || result == null) {
           client.close(() => {
@@ -37,20 +30,14 @@ function AunthClient(client, username, password) {
           console.log('Client authenticated successfully'.bgBlue)
           resolve(result)
         } else {
-          
           client.close(() => {
-            console.log('Authentication error, timeout!'.bgRed);
+            console.log('Authentication error, timeout!'.bgRed)
           })
           resolve(null)
         }
       })
-      
     } else if (username == 'device') {
-  
-      const filter = {
-        autenticador: password.toString()
-      }
-  
+      const filter = { autenticador: password.toString() }
       models.devices().findOne(filter, function (err, result) {
         if (err != null || result == null) {
           client.close(() => {
@@ -64,18 +51,16 @@ function AunthClient(client, username, password) {
           resolve(result)
         }
       })
-  
     } else {
       console.log('Authentication error, ID refused!'.bgRed)
       resolve(null)
       return
     }
-  });
+  })
 }
 
 aedes.authenticate = async function (client, username, password, callback) {
   const result = await AunthClient(client, username, password)
-
   if (result == null) {
     callback(null, false)
   } else {
@@ -88,73 +73,92 @@ aedes.authorizePublish = function (client, packet, callback) {
     return callback(new Error('$SYS/ topic is reserved'))
   }
 
+  console.log('Publishing: ' + packet.topic)
+
   const data = client.clientData
 
   if (data.AunthType == 'user') {
-
     const deviceSerial = data.device.serialNumber;
-    if (deviceSerial+ '-B' == packet.topic) {
+    if (deviceSerial + '-B' == packet.topic) {
       return callback(null)
     } else {
       return callback(new Error('wrong topic'))
     }
-  
   } else if (data.AunthType == 'device') {
-
     const deviceSerial = data.serialNumber;
-    if (deviceSerial+ '-A' == packet.topic) {
+    if (deviceSerial + '-A' == packet.topic) {
       return callback(null)
     } else {
       return callback(new Error('wrong topic'))
     }
-  
   } else {
     return callback(new Error('wrong topic'))
   }
 }
 
-// fired when a client connects
 aedes.on('client', function (client) {
-  const message = 'Client Connected: ' + client.id
-  console.log(message.bgYellow)
+  console.log(('Client Connected: ' + client.id).bgYellow)
 })
 
-// fired when a client disconnects
 aedes.on('clientDisconnect', function (client) {
-  const message = 'Client Disconnected: ' + client.id
-  console.log(message.bgRed)
+  console.log(('Client Disconnected: ' + client.id).bgRed)
 })
 
-// fired when a message is published
 aedes.on('publish', function (packet, client) {
   if (client) {
     const data = client.clientData
-
     if (data.AunthType == 'user') {
-      //
-    } else if (data.AunthType == 'device') {
-
+      console.log(data)
+    }
+    if (data.AunthType == 'device') {
       const deviceSerial = data.serialNumber;
-
-      // Guardado de informacion en la base de datos
-      models.devicesDatas(deviceSerial, packet.payload.toString()).save(function (err) {
+      let jsonData;
+      try {
+        const payload = packet.payload.toString();
+        console.log(payload)
+        jsonData = JSON.parse(payload);
+      } catch (err) {
+        console.log('Error parsing JSON', err);
+        return;
+      }
+      models.saveDeviceData(deviceSerial, jsonData).save(function (err) {
         if (err) {
-          console.log('Error save data!')
+          console.log('Error saving data!')
           return
         } 
         console.log('Data saved!')
       })
     }
-    console.log('Client \x1b[31m' + client.id + '\x1b[0m has published', packet.payload.toString(), 'on', packet.topic)
+    console.log(`Client ${client.id} has published ${packet.payload.toString()} on ${packet.topic}`)
   }
 })
 
 const httpServer = http.createServer()
 ws.createServer({ server: httpServer }, aedes.handle)
 
-function broker() {
-  httpServer.listen(configs.PORT, function () {
-    console.log('Aedes listening on port:', configs.PORT)
+// Ahora un único servidor TCP que se encarga de conexiones MQTT puro y con WebSocket
+const server = net.createServer((socket) => {
+  socket.once('data', (buffer) => {
+    // Detecta si la conexión es HTTP o no
+    const isHttp = buffer.toString().startsWith('GET') || buffer.toString().startsWith('POST')
+    // Volvemos a inyectar el buffer al stream
+    socket.pause()
+    socket.unshift(buffer)
+    if (isHttp) {
+      // Delega la conexión al servidor HTTP para el upgrade a WebSocket
+      httpServer.emit('connection', socket)
+    } else {
+      // En el caso de conexión MQTT "puro": se pasa directamente a Aedes
+      aedes.handle(socket)
+    }
+    socket.resume()
   })
-}
-models.init(broker)
+})
+
+models.init(() => {
+  console.log('Database connected!')
+})
+
+server.listen(configs.PORT, function () {
+  console.log('Aedes listening on port:', configs.PORT)
+})
