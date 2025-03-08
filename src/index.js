@@ -1,7 +1,6 @@
 const colors = require('colors')
 const ws = require('websocket-stream')
 const http = require('http')
-const net = require('net')
 const aedes = require('aedes')({ id: 'BROKER' })
 const mongoose = require('mongoose')
 
@@ -10,6 +9,11 @@ const models = require('./models')
 
 // Config
 const configs = require('./config')
+
+aedes.preConnect = async function (client, packet, callback) {
+  console.log('Client trying to connect: ' + client)
+  callback(null, true)
+}
 
 // Función de autenticación
 function AunthClient(client, username, password) {
@@ -62,7 +66,7 @@ function AunthClient(client, username, password) {
 aedes.authenticate = async function (client, username, password, callback) {
   const result = await AunthClient(client, username, password)
   if (result == null) {
-    callback(null, false)
+    callback(aedes.AuthenticateError, false)
   } else {
     callback(null, true)
   }
@@ -108,7 +112,7 @@ aedes.on('publish', function (packet, client) {
   if (client) {
     const data = client.clientData
     if (data.AunthType == 'user') {
-      console.log(data)
+      //console.log(data)
     }
     if (data.AunthType == 'device') {
       const deviceSerial = data.serialNumber;
@@ -136,29 +140,10 @@ aedes.on('publish', function (packet, client) {
 const httpServer = http.createServer()
 ws.createServer({ server: httpServer }, aedes.handle)
 
-// Ahora un único servidor TCP que se encarga de conexiones MQTT puro y con WebSocket
-const server = net.createServer((socket) => {
-  socket.once('data', (buffer) => {
-    // Detecta si la conexión es HTTP o no
-    const isHttp = buffer.toString().startsWith('GET') || buffer.toString().startsWith('POST')
-    // Volvemos a inyectar el buffer al stream
-    socket.pause()
-    socket.unshift(buffer)
-    if (isHttp) {
-      // Delega la conexión al servidor HTTP para el upgrade a WebSocket
-      httpServer.emit('connection', socket)
-    } else {
-      // En el caso de conexión MQTT "puro": se pasa directamente a Aedes
-      aedes.handle(socket)
-    }
-    socket.resume()
-  })
+httpServer.listen(configs.PORT, function () {
+  console.log('Aedes listening on port:', configs.PORT)
 })
 
 models.init(() => {
   console.log('Database connected!')
-})
-
-server.listen(configs.PORT, function () {
-  console.log('Aedes listening on port:', configs.PORT)
 })
