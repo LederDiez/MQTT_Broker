@@ -137,7 +137,28 @@ aedes.on('publish', function (packet, client) {
   }
 })
 
-const httpServer = http.createServer()
+const httpServer = http.createServer((req, res) => {
+  // Si es la ruta raíz y el método GET, servimos la página web simple
+  if (req.method === 'GET' && req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Servidor MQTT</title>
+      </head>
+      <body>
+        <h1>Servidor MQTT en linea</h1>
+      </body>
+      </html>
+    `);
+  } else {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('404 Not Found');
+  }
+});
 ws.createServer({ server: httpServer }, aedes.handle)
 
 httpServer.listen(configs.PORT, function () {
